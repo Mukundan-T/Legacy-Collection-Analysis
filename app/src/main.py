@@ -1,12 +1,13 @@
+from alma_holdings import get_oclcs, get_info_from_mms_id, get_mms_id_with_oclc
 from bookops_worldcat.authorize import WorldcatAccessToken
 from bookops_worldcat.metadata_api import MetadataSession
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
-import xml.etree.cElementTree as ET
-import openpyxl as op
 from tkinter import Tk, filedialog
 from os import getenv, startfile
 from pathlib import Path
+import xml.etree.cElementTree as ET
+import openpyxl as op
 
 def verify_token(filepath):
     """
@@ -26,7 +27,7 @@ def verify_token(filepath):
     print(token)
     print("Is expired: " + str(token.is_expired()))
 
-    return token
+    return token, getenv('BIB_KEY')
 
 def initialize_sheet(work_book):
     """
@@ -37,15 +38,23 @@ def initialize_sheet(work_book):
     """
     work_sheet = work_book.active
     work_sheet.title = "Book Records"
-    
-    work_sheet.append(["Title", "Edition", "Publisher", 
-                       "Date 1", "Date 2", "Holdings", 
-                       "Shared Prints", "Online Versions", 
-                       "Record Source", "OCLC Number"])
+
+    work_sheet.append(["[Alma] Call Number", "[Alma] Description",
+                       "[OCLC] Title", "[Alma] Title", "[OCLC] Edition",
+                       "[OCLC] Publisher", "[Alma] Publisher", 
+                       "[OCLC] Date 1", "[OCLC] Date 2", 
+                       "[Alma] Publication Date", "[Alma] Publication Place",
+                       "[OCLC] Holdings", "[OCLC] Shared Prints", 
+                       "[OCLC] Online Versions", "[Alma] Internal Note 1",
+                       "[Alma] Internal Note 2", "[OCLC] Record Source",
+                       "[Alma] Material Type", "[OCLC] OCLC Number", 
+                       "[Alma] OCLC Number", "[Alma] MMS ID", 
+                       "[Alma] Holdings ID", "[Alma] Item ID", 
+                       "[Alma] Barcode", "[Alma] Location"])
 
     return work_sheet
 
-def get_all_details(data, xml_str):
+def get_all_worldcat_details(data, xml_str):
     """
     Find and return all of the details pertaining to the given OCLC number.
 
@@ -137,9 +146,11 @@ def set_column_widths(work_sheet):
     :param work_sheet: the excel spreadsheet
     """
     column_widths = {
-        'A': 115, 'B': 20, 'C': 25, 'D': 10,
-        'E': 10, 'F': 10, 'G': 13, 'H': 21,
-        'I': 15, 'J': 16
+        'A': 20, 'B': 50, 'C': 75, 'D': 75, 'E': 20, 'F': 30,
+        'G': 30, 'H': 15, 'I': 15, 'J': 25, 'K': 25, 'L': 15,
+        'M': 20, 'N': 25, 'O': 30, 'P': 30, 'Q': 20, 'R': 20,
+        'S': 20, 'T': 20, 'U': 20, 'V': 20, 'W': 20, 'X': 20,
+        'Y': 20
     }
 
     for column, width in column_widths.items():
@@ -194,30 +205,62 @@ def get_record_and_holding_info(token, oclc_num):
     with MetadataSession(authorization = token) as session:
         result = session.bib_get(oclc_num)
         response = session.summary_holdings_get(oclc_num)
-    return (result, response)
-
-def get_all_info(infile, token):
-    """
-    Use multithreading for all the API calls needed for the OCLC numbers in
-    the given input file. After obtaining all of the information, parse it
-    and return a list of tuples, where each tuple is a (result, response).
-
-    :param infile: the input OCLC number file
-    :param token: a WorldcatAccessToken
-    :return: a list of tuples, where each entry in the tuple is a Response object
-    """
-    rate_limit = 50
-    futures = []
-    with ThreadPoolExecutor(max_workers = rate_limit) as executor:
-        for oclc_num in infile:
-            futures.append(executor.submit(get_record_and_holding_info, token, oclc_num))
     
-    info = []
-    for future in futures:
-        if future.result():
-            info.append(future.result())
+    xml_str = result.text
+    data = response.json()
+
+    return xml_str, data
+
+def arrange_info(worldcat_info, alma_info):
+    """
+    Docstring for arrange_info
     
-    return info
+    :param worldcat_info: A list of field values obtained from WorldCat
+    :param alma_info: A list of field values obtained from Alma
+    """
+    [title_details, edition_details, publisher_details, 
+     date_one_details, date_two_details, holdings, 
+     sharedprints, online_version_details, 
+     record_source_details, wc_oclc_number
+     ] = worldcat_info
+    
+    [title, perm_call_num, item_element_desc, publisher, 
+     publication_date, publication_place, internal_note1, 
+     internal_note2, material_type, al_oclc_num, mms_id, 
+     holdings_id, item_id, barcode, location] = alma_info
+    
+    return [perm_call_num, item_element_desc, title_details, 
+            title, edition_details, publisher_details, publisher,
+            date_one_details, date_two_details, publication_date,
+            publication_place, holdings, sharedprints, 
+            online_version_details, internal_note1, internal_note2,
+            record_source_details, material_type, wc_oclc_number, 
+            al_oclc_num, mms_id, holdings_id, item_id, barcode, 
+            location]
+
+def add_row(token, oclc, bib_key, ws):
+    """
+    Add a new row to the worksheet being created with holdings information for
+    the current OCLC number.
+
+    :param token: a WorldCatAccessToken
+    :param oclc: current OCLC number
+    :param bib_key: Bibliographic key for Alma
+    :param ws: worksheet being created
+    """
+    xml_str, data = get_record_and_holding_info(token, oclc)
+    worldcat_details = get_all_worldcat_details(data, xml_str)
+
+    params = {
+        "other_system_id": f"(OCoLC){oclc}",
+        "apikey": bib_key
+    }
+    mms_id = get_mms_id_with_oclc(params)
+
+    new_params = {"apikey": getenv("BIB_KEY")}
+    alma_details = get_info_from_mms_id(mms_id, new_params)
+
+    ws.append(arrange_info(worldcat_details, alma_details))
 
 def run_program(input_file):
     """
@@ -227,22 +270,17 @@ def run_program(input_file):
     :return: a string containing the path to the new excel spreadsheet
     """
     credential_file = Path(__file__).resolve().parent.parent / ".env"
-    token = verify_token(credential_file)
+    token, bib_key = verify_token(credential_file)
+
     work_book = op.Workbook()
     work_sheet = initialize_sheet(work_book)
-    infile = open(input_file, "r")
+    oclcs = get_oclcs(input_file)
 
-    all_info = get_all_info(infile, token)
-
-    for item in all_info:
-        result = item[0]
-        response = item[1]
-        data = response.json()
-        xml_str = result.text
-        details = get_all_details(data, xml_str)
-        work_sheet.append(details)
+    rate_limit = 10
+    with ThreadPoolExecutor(max_workers = rate_limit) as executor:
+        for oclc in oclcs:
+            executor.submit(add_row, token, oclc, bib_key, work_sheet)
     
     set_column_widths(work_sheet)
-
     save_path = select_result_location()
     return save_new_sheet(save_path, work_book)
