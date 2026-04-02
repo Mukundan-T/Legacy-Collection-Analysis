@@ -1,8 +1,15 @@
+"""
+Define methods to obtain information from the Alma API about holdings information and
+OCLC numbers, given input barcodes.
+
+:author: Mukundan Thanigaivelan
+"""
+
 from concurrent.futures import ThreadPoolExecutor
 from xml.etree.cElementTree import fromstring
-from requests import get
 from dotenv import load_dotenv
 from os import getenv
+from requests import get
 from pathlib import Path
 
 BASE_URL = "https://api-na.hosted.exlibrisgroup.com/almaws/v1"
@@ -27,64 +34,47 @@ def get_oclc(params: dict) -> str:
             return "".join(filter(str.isdigit, num.text))
     return ""
 
-def get_oclcs(barcode_file):
+def get_all_oclcs(barcode_file: str) -> list:
     """
-    Given a text file of barcodes, return a text file of OCLC numbers that
-    correspond to each barcode.
+    Given a text file of barcodes, return a list of OCLC numbers that
+    correspond to each barcode with parallel API requests to the Alma
+    API.
     
-    :param barcode_file: A text file of numerical barcodes
-    :param oclc_num_file: A text file of corresponding OCLC numbers
+    :param barcode_file: a text file of numerical barcodes
+    :param oclc_num_file: a list of corresponding OCLC numbers
     """
     env_file = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(env_file)
+    api_key = getenv("BIB_KEY")
 
     rate_limit = 10
-    futures = []
-    with ThreadPoolExecutor(max_workers = rate_limit) as executor, open(barcode_file, "r") as infile:
-        for barcode in infile:
-            futures.append(executor.submit(get_oclc, {
-                                           "item_barcode": barcode.strip(), 
-                                           "apikey": getenv("BIB_KEY")
-                                           }))
-
     oclcs = []
-    for future in futures:
-        if future.result():
-            oclcs.append(future.result())
+    with (ThreadPoolExecutor(max_workers = rate_limit) as executor, 
+          open(barcode_file, "r") as infile):
+        futures = [
+            executor.submit(
+                get_oclc, 
+                {"item_barcode": barcode.strip(), 
+                 "apikey": api_key}
+            ) 
+            for barcode in infile]
+        for future in futures:
+            result = future.result()
+            oclcs.append(result)
 
     return oclcs
 
-def get_oclcs_to_file(barcode_file: str, oclc_num_file: str) -> None:
+def write_oclcs_to_txt(oclcs: list, outfile_path: str) -> None:
     """
-    Given a text file of barcodes, return a text file of OCLC numbers that
-    correspond to each barcode.
-    
-    :param barcode_file: A text file of numerical barcodes
-    :param oclc_num_file: A text file of corresponding OCLC numbers
+    Given a list of OCLC numbers and an outfile path, write the OCLC numbers
+    to the given text file.
+
+    :param oclcs: a list of OCLC numbers
+    :param outfile_path: a string path to text file
     """
-    env_file = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_file)
-
-    rate_limit = 10
-    futures = []
-    with ThreadPoolExecutor(max_workers = rate_limit) as executor, open(barcode_file, "r") as infile:
-        for barcode in infile:
-            futures.append(executor.submit(get_oclc, {
-                                           "item_barcode": barcode.strip(), 
-                                           "apikey": getenv("BIB_KEY")
-                                           }))
-
-    oclcs = []
-    for future in futures:
-        if future.result():
-            oclcs.append(future.result())
-
-    return oclcs
-
-    # with open(oclc_num_file, "w") as outfile:
-    #     for future in futures:
-    #         if future.result():
-    #             outfile.write(f"{future.result()}\n")
+    with open(outfile_path, "w") as outfile:
+        for oclc in oclcs:
+            outfile.write(f"{oclc}\n")
 
 def get_mms_id_with_oclc(params: dict) -> str:
     """
@@ -138,26 +128,3 @@ def get_info_from_mms_id(mms_id: str, params: dict) -> str:
             info.append("None")
 
     return info
-
-def main():
-    # Obtain an OCLC Number with a barcode
-    get_oclcs_to_file("tests/barcodes.txt", "tests/oclc.txt")
-
-    # Load .env with API keys
-    env_file = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_file)
-
-    # Obtain an MMS ID using the OCLC number
-    oclc = 19590300
-    params = {
-        "other_system_id": f"(OCoLC){oclc}",
-        "apikey": getenv("BIB_KEY")
-    }
-    mms_id = get_mms_id_with_oclc(params)
-
-    # Obtain all holdings information using the MMS ID
-    new_params = {"apikey": getenv("BIB_KEY")}
-    print(get_info_from_mms_id(mms_id, new_params))
-
-if __name__ == "__main__":
-    main()
