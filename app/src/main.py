@@ -1,286 +1,142 @@
-from alma_holdings import get_oclcs, get_info_from_mms_id, get_mms_id_with_oclc
-from bookops_worldcat.authorize import WorldcatAccessToken
-from bookops_worldcat.metadata_api import MetadataSession
-from concurrent.futures import ThreadPoolExecutor
-from dotenv import load_dotenv
-from tkinter import Tk, filedialog
-from os import getenv, startfile
-from pathlib import Path
-import xml.etree.cElementTree as ET
-import openpyxl as op
+"""
+Run the program through a GUI designed here.
 
-def verify_token(filepath):
+:author: Mukundan Thanigaivelan
+"""
+
+from tkinter import filedialog, messagebox, ttk, Tk, StringVar, Label
+from os import path
+from threading import Thread
+from application import build_sheet
+
+class OCLCApp:
     """
-    Given a .env file with the valid API credentials, create and return a
-    WorldcatAccessToken.
-
-    :return: a WorldcatAccessToken
+    Define a class to display the main GUI for the application.
     """
-    load_dotenv(filepath)
 
-    token = WorldcatAccessToken(
-        key = getenv("API_KEY"),
-        secret = getenv("API_SECRET"),
-        scopes = getenv("API_SCOPES")
-    )
+    def __init__(self, root):
+        """
+        Use a Tkinter object to instantiate a window for this application and
+        style it as given.
 
-    print(token)
-    print("Is expired: " + str(token.is_expired()))
+        :param self: this object
+        :param root: a Tkinter object
+        """
+        self.root = root
+        self.root.title("OCLC Cataloging Widget")
+        self.root.geometry("360x360")
+        self.root.resizable(True, True)
 
-    return token, getenv('BIB_KEY')
+        # Ttk theme setup
+        style = ttk.Style()
+        style.theme_use("classic")
+        style.configure("TButton", font=("Arial", 11), padding=3)
+        style.configure("TLabel", font=("Arial", 10))
+        style.configure("Run.TButton", font=("Arial", 12), padding=3)
 
-def initialize_sheet(work_book):
-    """
-    Add the headings to each column in the new excel sheet.
+        self.input_file = ""
+        self.output_dir = ""
 
-    :param work_book: the workbook excel
-    :return: a new work sheet with column headings
-    """
-    work_sheet = work_book.active
-    work_sheet.title = "Book Records"
+        # Main layout frame
+        main_frame = ttk.Frame(root, padding=20)
+        main_frame.pack(expand=True, fill="both")
 
-    work_sheet.append(["[Alma] Call Number", "[Alma] Description",
-                       "[OCLC] Title", "[Alma] Title", "[OCLC] Edition",
-                       "[OCLC] Publisher", "[Alma] Publisher", 
-                       "[OCLC] Date 1", "[OCLC] Date 2", 
-                       "[Alma] Publication Date", "[Alma] Publication Place",
-                       "[OCLC] Holdings", "[OCLC] Shared Prints", 
-                       "[OCLC] Online Versions", "[Alma] Internal Note 1",
-                       "[Alma] Internal Note 2", "[OCLC] Record Source",
-                       "[Alma] Material Type", "[OCLC] OCLC Number", 
-                       "[Alma] OCLC Number", "[Alma] MMS ID", 
-                       "[Alma] Holdings ID", "[Alma] Item ID", 
-                       "[Alma] Barcode", "[Alma] Location"])
+        # Input selection
+        ttk.Button(main_frame, text="Select Input File", command=self.select_input_file).grid(row=0, column=0, sticky="w", pady=5)
+        self.input_label = ttk.Label(main_frame, text="No file selected", foreground="gray")
+        self.input_label.grid(row=0, column=1, sticky="w", padx=10)
 
-    return work_sheet
+        # Output selection
+        ttk.Button(main_frame, text="Select Output Directory", command=self.select_output_dir).grid(row=1, column=0, sticky="w", pady=5)
+        self.output_label = ttk.Label(main_frame, text="No directory selected", foreground="gray")
+        self.output_label.grid(row=1, column=1, sticky="w", padx=10)
 
-def get_all_worldcat_details(data, xml_str):
-    """
-    Find and return all of the details pertaining to the given OCLC number.
+        # Note to select file name
+        self.note = ttk.Label(
+            main_frame,
+            text="*After you run the program, a window will pop up where you can name the output file.",
+            font=("Arial", 11),
+            foreground="black",
+            wraplength=350,  # makes it wrap nicely if long
+            justify="left"   # aligns text to the left
+        )
+        self.note.grid(row=2, columnspan=2, pady=(5, 15), sticky="w")
 
-    :param data: a dictionary containing all information
-    :param xml_str: a string containing the XML data
-    :return: a list containing all of the details pertaining to the OCLC 
-    number in the order that they appear in the excel sheet
-    """
-    # Holdings extraction
-    holdings = data['totalHoldingCount']
-    sharedprints = data['totalSharedPrintCount']
+        # Separator
+        ttk.Separator(main_frame, orient="horizontal").grid(row=3, columnspan=2, sticky="ew", pady=15)
 
-    root = ET.fromstring(xml_str)
-    ns = {'marc': 'http://www.loc.gov/MARC21/slim'}
+        # Progress bar
+        self.progress = ttk.Progressbar(main_frame, mode="indeterminate", length=300)
+        self.progress.grid(row=4, columnspan=2, pady=5)
 
-    # OCLC number extraction
-    oclc = root.find("marc:controlfield[@tag='001']", ns)
+        # Run button
+        ttk.Button(main_frame, text="Run", style="Run.TButton", command=self.run_conversion).grid(row=5, columnspan=2, pady=10)
 
-    oclc_number = oclc.text if oclc is not None else "Not found"
-    oclc_number = '#' + oclc_number[3:]
+        # Status bar
+        self.status_var = StringVar(value="Ready")
+        self.status_label = Label(root, textvariable=self.status_var, font=("Arial", 9), bg="#eee", anchor="w", relief="sunken")
+        self.status_label.pack(side="bottom", fill="x")
 
-    # online_versions extration
-    online_versions = root.find("marc:datafield[@tag='776']", ns)
+    def select_input_file(self):
+        """
+        Ask for the input text file of barcodes.
+        """
+        file_path = filedialog.askopenfilename(
+            title="Select Input Text File",
+            filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")]
+        )
+        if file_path:
+            self.input_file = file_path
+            self.input_label.config(text=path.basename(file_path), foreground="black")
 
-    if online_versions is not None:
-        subfields = online_versions.findall("marc:subfield[@code='w']", ns)
-        online_version_details = " ".join(sub.text for sub in subfields if sub.text)
-    else:
-        online_version_details = "Info: Not found"
+    def select_output_dir(self):
+        """
+        Ask for the output directory in which the Excel spreadsheet be stored.
+        """
+        folder_path = filedialog.askdirectory(title="Select Output Directory")
+        if folder_path:
+            self.output_dir = folder_path
+            self.output_label.config(text=folder_path, foreground="black")
 
-    # Title extration
-    title = root.find("marc:datafield[@tag='245']", ns)
+    def run_conversion(self):
+        """
+        Display appropriate error messages for file selection and actually run
+        the application in a separate thread.
+        """
+        if not self.input_file:
+            messagebox.showerror("Error", "Please select an input file.")
+            return
+        if not self.output_dir:
+            messagebox.showerror("Error", "Please select an output directory.")
+            return
 
-    if title is not None:
-        subfields = title.findall("marc:subfield",ns)
-        title_details = " ".join(sub.text for sub in subfields if sub.text)
-    else:
-        title_details = "No title found"
+        # Run processing in a separate thread so GUI doesn't freeze
+        Thread(target=self._do_conversion, daemon=True).start()
 
-    # Edition extraction
-    edition = root.find("marc:datafield[@tag='250']",ns)
+    def _do_conversion(self):
+        """
+        Run the application.
+        """
+        try:
+            self.status_var.set("Processing...")
+            self.status_label.config(bg="#ffeaa7")
+            self.progress.start(10)
 
-    if edition is not None:
-        subfields = edition.findall("marc:subfield", ns)
-        edition_details = " ".join(sub.text for sub in subfields if sub.text)
-    else:
-        edition_details = "-"
+            output_path = build_sheet(self.input_file)
 
-    # Publisher extraction only subfield b
-    publisher_old = root.find("marc:datafield[@tag='260']", ns)
-    publisher_new = root.find("marc:datafield[@tag='264']", ns)
+            self.status_var.set("Done!")
+            self.status_label.config(bg="#72d572")  # light green for success
+            self.progress.stop()
 
-    if publisher_old is not None and publisher_new is None:
-        subfields = publisher_old.findall("marc:subfield[@code='b']", ns)
-        publisher_details = " ".join(sub.text for sub in subfields if sub.text)
+            messagebox.showinfo("Success", f"File created:\n{output_path}")
 
-    elif publisher_old is None and publisher_new is not None:
-        subfields = publisher_new.findall("marc:subfield[@code='b']", ns)  # FIXED: same as above
-        publisher_details = " ".join(sub.text for sub in subfields if sub.text)
+        except Exception as e:
+            self.status_var.set("Error")
+            self.status_label.config(bg="#f8a5a5")  # light red for error
+            self.progress.stop()
+            messagebox.showerror("Error", f"An error occurred:\n{e}")
 
-    else:
-        publisher_details = "-"
-
-    # Date extraction
-    date_one = root.find("marc:controlfield[@tag='008']", ns)
-
-    date_details = date_one.text if date_one is not None else "Not found"
-    date_one_details = date_details[7:11]
-    date_two_details = date_details[11:15]
-
-    # Record source extraction
-    record_source = root.find("marc:datafield[@tag='040']", ns)
-
-    if record_source is not None:
-        subfield = record_source.findall("marc:subfield[@code='a']",ns)
-        record_source_details = " ".join(sub.text for sub in subfield if sub.text)
-    else:
-        record_source_details = "Not Found"
-
-    return [title_details, edition_details, publisher_details, 
-            date_one_details, date_two_details, holdings, 
-            sharedprints, online_version_details, 
-            record_source_details, oclc_number]
-
-def set_column_widths(work_sheet):
-    """
-    Set the width for each column in the excel spreadsheet.
-
-    :param work_sheet: the excel spreadsheet
-    """
-    column_widths = {
-        'A': 20, 'B': 50, 'C': 75, 'D': 75, 'E': 20, 'F': 30,
-        'G': 30, 'H': 15, 'I': 15, 'J': 25, 'K': 25, 'L': 15,
-        'M': 20, 'N': 25, 'O': 30, 'P': 30, 'Q': 20, 'R': 20,
-        'S': 20, 'T': 20, 'U': 20, 'V': 20, 'W': 20, 'X': 20,
-        'Y': 20
-    }
-
-    for column, width in column_widths.items():
-        work_sheet.column_dimensions[column].width = width
-
-def select_result_location():
-    """
-    Return the path to the new Excel file (where it should be saved).
-
-    :return: a string containing the path to the new excel file
-    """
+if __name__ == "__main__":
     root = Tk()
-    root.withdraw()
-
-    save_path = filedialog.asksaveasfilename(
-        defaultextension = ".xlsx",
-        filetypes = [("Excel files", "*.xlsx")],
-        title = "Save Excel File As..."
-    )
-
-    return save_path
-
-def save_new_sheet(path, work_book):
-    """
-    Save the new excel spreadsheet to the indicated directory. If the 
-    save was canceled, return None.
-
-    :param path: the path to the directory
-    :param work_book: the workbook excel
-    :return: the path to the excel spreadsheet, None if the save 
-    was canceled
-    """
-    if path:
-        work_book.save(path)
-        print(f"Excel file saved to: {path}")
-        startfile(path)
-        return path
-    else:
-        print("Save canceled.")
-        return None
-
-def get_record_and_holding_info(token, oclc_num):
-    """
-    Given the token and an oclc_num, use the WorldcatMetadataAPI to get the records
-    and the holdings information for the OCLC number, and return them.
-
-    :param token: a WorldCatAccessToken
-    :param oclc_num: the current OCLC number in the given input file
-    :return: a tuple of two Response objects, the first being the result and 
-    the second being the response
-    """
-    with MetadataSession(authorization = token) as session:
-        result = session.bib_get(oclc_num)
-        response = session.summary_holdings_get(oclc_num)
-    
-    xml_str = result.text
-    data = response.json()
-
-    return xml_str, data
-
-def arrange_info(worldcat_info, alma_info):
-    """
-    Docstring for arrange_info
-    
-    :param worldcat_info: A list of field values obtained from WorldCat
-    :param alma_info: A list of field values obtained from Alma
-    """
-    [title_details, edition_details, publisher_details, 
-     date_one_details, date_two_details, holdings, 
-     sharedprints, online_version_details, 
-     record_source_details, wc_oclc_number
-     ] = worldcat_info
-    
-    [title, perm_call_num, item_element_desc, publisher, 
-     publication_date, publication_place, internal_note1, 
-     internal_note2, material_type, al_oclc_num, mms_id, 
-     holdings_id, item_id, barcode, location] = alma_info
-    
-    return [perm_call_num, item_element_desc, title_details, 
-            title, edition_details, publisher_details, publisher,
-            date_one_details, date_two_details, publication_date,
-            publication_place, holdings, sharedprints, 
-            online_version_details, internal_note1, internal_note2,
-            record_source_details, material_type, wc_oclc_number, 
-            al_oclc_num, mms_id, holdings_id, item_id, barcode, 
-            location]
-
-def add_row(token, oclc, bib_key, ws):
-    """
-    Add a new row to the worksheet being created with holdings information for
-    the current OCLC number.
-
-    :param token: a WorldCatAccessToken
-    :param oclc: current OCLC number
-    :param bib_key: Bibliographic key for Alma
-    :param ws: worksheet being created
-    """
-    xml_str, data = get_record_and_holding_info(token, oclc)
-    worldcat_details = get_all_worldcat_details(data, xml_str)
-
-    params = {
-        "other_system_id": f"(OCoLC){oclc}",
-        "apikey": bib_key
-    }
-    mms_id = get_mms_id_with_oclc(params)
-
-    new_params = {"apikey": getenv("BIB_KEY")}
-    alma_details = get_info_from_mms_id(mms_id, new_params)
-
-    ws.append(arrange_info(worldcat_details, alma_details))
-
-def run_program(input_file):
-    """
-    Run the script for every OCLC number in the input text file.
-
-    :param input_file: a text file of OCLC numbers
-    :return: a string containing the path to the new excel spreadsheet
-    """
-    credential_file = Path(__file__).resolve().parent.parent / ".env"
-    token, bib_key = verify_token(credential_file)
-
-    work_book = op.Workbook()
-    work_sheet = initialize_sheet(work_book)
-    oclcs = get_oclcs(input_file)
-
-    rate_limit = 10
-    with ThreadPoolExecutor(max_workers = rate_limit) as executor:
-        for oclc in oclcs:
-            executor.submit(add_row, token, oclc, bib_key, work_sheet)
-    
-    set_column_widths(work_sheet)
-    save_path = select_result_location()
-    return save_new_sheet(save_path, work_book)
+    OCLCApp(root)
+    root.mainloop()
