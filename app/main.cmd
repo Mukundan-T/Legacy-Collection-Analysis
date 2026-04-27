@@ -1,6 +1,7 @@
 @echo off
 REM ===============================================
 REM Run Python script from CMD
+REM Author: Mukundan Thanigaivelan
 REM ===============================================
 
 REM Optional: Set project root (script directory)
@@ -17,4 +18,4 @@ REM Optional: Set Python path if needed
 REM set "PYTHON=C:\Path\To\Python39\python.exe"
 
 REM Run the Python script
-python "%APP_DIR%\src\runScript.py"
+python "%APP_DIR%\src\main.py"

@@ -1,6 +1,7 @@
 @echo off
 REM ===============================================
 REM Setup Script for App
+REM Author: Mukundan Thanigaivelan
 REM ===============================================
 
 REM -----------------------------------------------
@@ -61,16 +62,18 @@ REM Create .env if it doesn't exist
 REM -----------------------------------------------
 setlocal EnableDelayedExpansion
 if not exist "%APP_DIR%\.env" (
-    echo .env file not found — please enter your WorldcatMetadataAPI credentials:
+    echo .env file not found — please enter your WorldcatMetadataAPI and Alma credentials:
 
     set /p APIKey="API Key: "
     set /p APISecret="API Secret: "
     set /p APIScopes="API Scopes: "
+    set /p BibKey="Alma Bibkey: "
 
     REM Write .env file line by line
     echo API_KEY=!APIKey!> "%APP_DIR%\.env"
     echo API_SECRET=!APISecret!>> "%APP_DIR%\.env"
     echo API_SCOPES=!APIScopes!>> "%APP_DIR%\.env"
+    echo BIB_KEY=!BibKey!>> "%APP_DIR%\.env"
 
     echo Writing API credentials to .env ...
     echo:
