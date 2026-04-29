@@ -6,16 +6,14 @@ REM ===============================================
 
 REM Optional: Set project root (script directory)
 set "APP_DIR=%~dp0"
-set "ROOT_DIR=%APP_DIR%.."
+@REM set "ROOT_DIR=%APP_DIR%.." changed below
+for %%i in ("%APP_DIR%\..") do set "ROOT_DIR=%%~fi"
 
 REM Path to .venv
 set "VENV_DIR=%ROOT_DIR%\.venv"
 
-REM Activate the virtual environment
-call "%VENV_DIR%\Scripts\activate.bat"
+REM Activate the virtual environment (commented)
+@REM call "%VENV_DIR%\Scripts\activate.bat"
 
-REM Optional: Set Python path if needed
-REM set "PYTHON=C:\Path\To\Python39\python.exe"
-
-REM Run the Python script
-python "%APP_DIR%\src\main.py"
+REM Run the Python script (changed from python)
+"%VENV_DIR%\Scripts\python.exe" "%APP_DIR%\src\main.py"

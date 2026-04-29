@@ -11,7 +11,8 @@ REM %~dp0 = directory of this script (always ends with \)
 set "SCRIPT_DIR=%~dp0"
 
 REM ROOT_DIR = two levels up from script location (where requirements.txt lives)
-set "ROOT_DIR=%SCRIPT_DIR%\.."
+@REM set "ROOT_DIR=%SCRIPT_DIR%\.."
+for %%i in ("%SCRIPT_DIR%\..") do set "ROOT_DIR=%%~fi"
 
 REM APP_DIR = your app folder (relative to ROOT_DIR)
 set "APP_DIR=%ROOT_DIR%\app"
@@ -29,14 +30,28 @@ REM -----------------------------------------------
 if not exist "%VENV_DIR%" (
     echo Creating virtual environment in %VENV_DIR% ...
     python -m venv "%VENV_DIR%"
+    if errorlevel 1 (
+        echo ERROR: Failed to create virtual environment
+        pause
+        exit /b 1
+    )
 ) else (
     echo Virtual environment already exists.
 )
 
 REM -----------------------------------------------
-REM Activate the venv
+REM Verify venv is valid
 REM -----------------------------------------------
-call "%VENV_DIR%\Scripts\activate.bat"
+if not exist "%VENV_DIR%\Scripts\python.exe" (
+    echo ERROR: venv is missing python.exe — creation failed
+    pause
+    exit /b 1
+)
+
+REM -----------------------------------------------
+REM Activate the venv (commented)
+REM -----------------------------------------------
+REM call "%VENV_DIR%\Scripts\activate.bat"
 
 REM -----------------------------------------------
 REM Install requirements into the venv
@@ -47,8 +62,9 @@ if not exist "%ROOT_DIR%\requirements.txt" (
 )
 
 echo Installing Python requirements into .venv ...
-python -m pip install --upgrade pip
-pip install -r "%ROOT_DIR%\requirements.txt"
+REM Used to be python, then nothing pip
+"%VENV_DIR%\Scripts\python.exe" -m pip install --upgrade pip
+"%VENV_DIR%\Scripts\python.exe" -m pip install -r "%ROOT_DIR%\requirements.txt"
 echo:
 
 REM Debug info (optional)
