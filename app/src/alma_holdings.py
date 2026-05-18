@@ -24,14 +24,26 @@ def get_oclc(params: dict) -> str:
     :param params: URL params with the Alma API key and barcode
     :return: the OCLC number corresponding to that barcode; "" otherwise
     """
-    response = get(OCLC_URL, params=params, allow_redirects=True)
+    try:
+        response = get(OCLC_URL, params=params, allow_redirects=True)
+        response.raise_for_status()
+    except Exception as e:
+        print(f"Failed API request for barcode {params['item_barcode']}: {e}")
+        return ""
     
-    root = fromstring(response.text)
+    try:
+        root = fromstring(response.text)
+    except Exception as e:
+        print(f"Failed to parse XML for barcode {params.get('item_barcode')}: {e}")
+        return ""
+
     nums = root.findall(".//network_number")
     
     for num in nums:
         if "OCoLC" in num.text:
             return "".join(filter(str.isdigit, num.text))
+        
+    print(f"No OCLC found for barcode {params.get('item_barcode')}")
     return ""
 
 def get_all_oclcs(barcode_file: str) -> list:
@@ -49,15 +61,19 @@ def get_all_oclcs(barcode_file: str) -> list:
 
     rate_limit = 10
     oclcs = []
-    with (ThreadPoolExecutor(max_workers = rate_limit) as executor, 
-          open(barcode_file, "r") as infile):
+    with (
+        ThreadPoolExecutor(max_workers = rate_limit) as executor, 
+        open(barcode_file, "r") as infile
+    ):
         futures = [
             executor.submit(
                 get_oclc, 
                 {"item_barcode": barcode.strip(), 
-                 "apikey": api_key}
+                 "apikey": api_key,
+                 "format": "xml"}
             ) 
-            for barcode in infile]
+            for barcode in infile
+        ]
         for future in futures:
             result = future.result()
             oclcs.append(result)

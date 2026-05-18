@@ -7,6 +7,7 @@ Run the program through a GUI designed here.
 from tkinter import filedialog, messagebox, ttk, Tk, StringVar, Label
 from os import path
 from threading import Thread
+from setup_env import create_env
 from application import build_sheet
 
 class OCLCApp:
@@ -23,7 +24,7 @@ class OCLCApp:
         :param root: a Tkinter object
         """
         self.root = root
-        self.root.title("OCLC Cataloging Widget")
+        self.root.title("Legacy Collection Analysis")
         self.root.geometry("360x360")
         self.root.resizable(True, True)
 
@@ -42,12 +43,20 @@ class OCLCApp:
         main_frame.pack(expand=True, fill="both")
 
         # Input selection
-        ttk.Button(main_frame, text="Select Input File", command=self.select_input_file).grid(row=0, column=0, sticky="w", pady=5)
+        ttk.Button(
+            main_frame, 
+            text="Select Barcode File", 
+            command=self.select_input_file
+        ).grid(row=0, column=0, sticky="w", pady=5)
         self.input_label = ttk.Label(main_frame, text="No file selected", foreground="gray")
         self.input_label.grid(row=0, column=1, sticky="w", padx=10)
 
         # Output selection
-        ttk.Button(main_frame, text="Select Output Directory", command=self.select_output_dir).grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Button(
+            main_frame, 
+            text="Select Output Directory", 
+            command=self.select_output_dir
+        ).grid(row=1, column=0, sticky="w", pady=5)
         self.output_label = ttk.Label(main_frame, text="No directory selected", foreground="gray")
         self.output_label.grid(row=1, column=1, sticky="w", padx=10)
 
@@ -138,5 +147,7 @@ class OCLCApp:
 
 if __name__ == "__main__":
     root = Tk()
+    create_env(root)
+    root.deiconify()
     OCLCApp(root)
     root.mainloop()
