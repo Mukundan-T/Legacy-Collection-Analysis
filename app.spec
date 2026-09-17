@@ -3,7 +3,7 @@
 
 a = Analysis(
     ['app\\src\\main.py'],
-    pathex=['app/src'],
+    pathex=[],
     binaries=[],
     datas=[],
     hiddenimports=[],
@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='main',
+    name='app',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
