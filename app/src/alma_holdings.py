@@ -1,11 +1,10 @@
 """
-Define methods to obtain information from the Alma API about holdings information and
-OCLC numbers, given input barcodes.
+Define methods to obtain information from the Alma API about holdings information, MMS
+IDs, and OCLC numbers, given input identifiers.
 
 :author: Mukundan Thanigaivelan
 """
 
-from concurrent.futures import ThreadPoolExecutor
 from xml.etree.cElementTree import fromstring
 from dotenv import load_dotenv
 from os import getenv
@@ -16,98 +15,94 @@ BASE_URL = "https://api-na.hosted.exlibrisgroup.com/almaws/v1"
 OCLC_URL = f"{BASE_URL}/items"
 ALMA_URL = f"{BASE_URL}/bibs"
 
-def get_oclc(params: dict) -> str:
+def get_mms_id(
+    barcode: str = None, 
+    pid: str = None,
+    oclc: str = None
+) -> str:
     """
-    Given URL params, query the Alma API and obtain information from which find and
-    return the OCLC number.
-    
-    :param params: URL params with the Alma API key and barcode
-    :return: the OCLC number corresponding to that barcode; "" otherwise
-    """
-    try:
-        response = get(OCLC_URL, params=params, allow_redirects=True)
-        response.raise_for_status()
-    except Exception as e:
-        print(f"Failed API request for barcode {params['item_barcode']}: {e}")
-        return ""
-    
-    try:
-        root = fromstring(response.text)
-    except Exception as e:
-        print(f"Failed to parse XML for barcode {params.get('item_barcode')}: {e}")
-        return ""
+    Using the given barcode, Item PID, or OCLC #, get the item's MMS ID and
+    return it.
 
-    nums = root.findall(".//network_number")
-    
-    for num in nums:
-        if "OCoLC" in num.text:
-            return "".join(filter(str.isdigit, num.text))
-        
-    print(f"No OCLC found for barcode {params.get('item_barcode')}")
-    return ""
-
-def get_all_oclcs(barcode_file: str) -> list:
-    """
-    Given a text file of barcodes, return a list of OCLC numbers that
-    correspond to each barcode with parallel API requests to the Alma
-    API.
-    
-    :param barcode_file: a text file of numerical barcodes
-    :param oclc_num_file: a list of corresponding OCLC numbers
+    :param barcode: a given barcode string
+    :param pid: a given Item PID or None
+    :param oclc: a given OCLC # or None
+    :return: a string with MMS ID
     """
     env_file = Path(__file__).resolve().parent.parent / ".env"
     load_dotenv(env_file)
     api_key = getenv("BIB_KEY")
 
-    rate_limit = 10
-    oclcs = []
-    with (
-        ThreadPoolExecutor(max_workers = rate_limit) as executor, 
-        open(barcode_file, "r") as infile
-    ):
-        futures = [
-            executor.submit(
-                get_oclc, 
-                {"item_barcode": barcode.strip(), 
-                 "apikey": api_key,
-                 "format": "xml"}
-            ) 
-            for barcode in infile
-        ]
-        for future in futures:
-            result = future.result()
-            oclcs.append(result)
+    headers = {
+        "Authorization": f"apikey {api_key}",
+        "Accept": "application/json",
+    }
 
-    return oclcs
+    if barcode:
+        response = get(
+            OCLC_URL, 
+            params = {
+                "item_barcode": barcode,
+            }, 
+            headers = headers, 
+            allow_redirects = True
+        )
+    elif pid:
+        response = get(
+            f"{ALMA_URL}/0/holdings/0/items/{pid}", 
+            headers = headers
+        )
+    elif oclc:
+        response = get(
+            ALMA_URL,
+            params = {
+                "other_system_id": f"(OCoLC){oclc}"
+            },
+            headers = headers
+        )
+    else:
+        raise ValueError("Either barcode, Item PID, or OCLC # must be provided.")
 
-def write_oclcs_to_txt(oclcs: list, outfile_path: str) -> None:
+    response.raise_for_status()
+    item = response.json()
+
+    if oclc:
+        return item["bib"][0]["mms_id"]
+
+    return item["bib_data"]["mms_id"]
+
+def get_oclc(mms_id: str):
     """
-    Given a list of OCLC numbers and an outfile path, write the OCLC numbers
-    to the given text file.
+    Given an MMS ID, get the OCLC number and return it as a string.
 
-    :param oclcs: a list of OCLC numbers
-    :param outfile_path: a string path to text file
+    :param mms_id: The MMS ID of the holding as a string
+    :return: OCLC number as a string
     """
-    with open(outfile_path, "w") as outfile:
-        for oclc in oclcs:
-            outfile.write(f"{oclc}\n")
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(env_file)
+    api_key = getenv("BIB_KEY")
 
-def get_mms_id_with_oclc(params: dict) -> str:
-    """
-    Given URL params with the OCLC number and API key, return the MMS ID
-    for the holding.
+    response = get(
+        f"{ALMA_URL}/{mms_id}",
+        headers = {
+            "Authorization": f"apikey {api_key}",
+            "Accept": "application/json",
+        }
+    )
+
+    response.raise_for_status()
+    bib = response.json()
+
+    if not bib["network_number"]:
+        return ""
     
-    :param params: URL params to get the MMS ID with the OCLC number
-    :return: the MMS ID if it exists; "" otherwise
-    """
-    response = get(ALMA_URL, params=params, allow_redirects=True)
-
-    root = fromstring(response.text)
-    mms_id = root.find(".//mms_id")
-
-    if mms_id.text:
-        return mms_id.text
-    return ""
+    return next(
+        (number.removeprefix("(OCoLC)") 
+            for number in bib["network_number"] 
+            if number.startswith("(OCoLC)")
+        ),
+        None
+    )
 
 def get_info_from_mms_id(mms_id: str, params: dict) -> str:
     """
