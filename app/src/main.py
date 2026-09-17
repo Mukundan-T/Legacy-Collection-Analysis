@@ -168,7 +168,7 @@ class OCLCApp:
             messagebox.showerror("Error", "Please select an output directory.")
             return
         if not self.option_var.get():
-            messagebox.showerror("Error", "Please select an option.")
+            messagebox.showerror("Error", "Please select a file type.")
             return
 
         selected_filetype = self.option_var.get()
