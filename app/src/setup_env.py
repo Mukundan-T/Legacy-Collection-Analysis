@@ -4,16 +4,12 @@ Setup the environment variables for API requests.
 :author: Mukundan Thanigaivelan
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
+from dotenv import load_dotenv
 from tkinter import Tk, simpledialog, messagebox
 
-if getattr(sys, "frozen", False):
-    ROOT_DIR = Path(sys.executable).resolve().parent.parent
-else:
-    ROOT_DIR = Path(__file__).resolve().parents[2]
-
-ENV_FILE = ROOT_DIR / "app" / ".env"
+ENV_FILE = Path(sys.executable).parent / ".env"
 
 def ask(prompt: str, root: Tk) -> None:
     """
@@ -54,6 +50,7 @@ def create_env(root: Tk) -> None:
     root.attributes("-topmost", True)
 
     if ENV_FILE.exists():
+        load_dotenv(ENV_FILE)
         return
 
     api_key = ask("API Key", root)
@@ -72,6 +69,8 @@ def create_env(root: Tk) -> None:
         ),
         encoding="utf-8"
     )
+
+    load_dotenv(ENV_FILE)
     messagebox.showinfo(
         "Setup Complete",
         ".env created successfully!",
