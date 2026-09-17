@@ -45,7 +45,7 @@ class OCLCApp:
         # Input selection
         ttk.Button(
             main_frame, 
-            text="Select File", 
+            text="Select Text File", 
             command=self.select_input_file
         ).grid(row=0, column=0, sticky="w", pady=5)
         self.input_label = ttk.Label(main_frame, text="No file selected", foreground="gray")
