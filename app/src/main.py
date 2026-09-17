@@ -45,7 +45,7 @@ class OCLCApp:
         # Input selection
         ttk.Button(
             main_frame, 
-            text="Select Barcode File", 
+            text="Select File", 
             command=self.select_input_file
         ).grid(row=0, column=0, sticky="w", pady=5)
         self.input_label = ttk.Label(main_frame, text="No file selected", foreground="gray")
@@ -60,30 +60,79 @@ class OCLCApp:
         self.output_label = ttk.Label(main_frame, text="No directory selected", foreground="gray")
         self.output_label.grid(row=1, column=1, sticky="w", padx=10)
 
+        # Output selection
+        ttk.Button(
+            main_frame, 
+            text="Select Output Directory", 
+            command=self.select_output_dir
+        ).grid(row=1, column=0, sticky="w", pady=5)
+
+        self.output_label = ttk.Label(
+            main_frame,
+            text="No directory selected",
+            foreground="gray"
+        )
+        self.output_label.grid(row=1, column=1, sticky="w", padx=10)
+
+        # Option selection
+        ttk.Label(
+            main_frame,
+            text="Select File Type"
+        ).grid(row=2, column=0, sticky="w", pady=5, padx=10)
+
+        self.option_var = StringVar()
+
+        self.option_dropdown = ttk.Combobox(
+            main_frame,
+            textvariable=self.option_var,
+            values=["Barcode", "OCLC Number", "Item PID"],
+            state="readonly",
+            width=20
+        )
+        self.option_dropdown.grid(row=2, column=1, sticky="w", padx=10)
+
         # Note to select file name
         self.note = ttk.Label(
             main_frame,
             text="*After you run the program, a window will pop up where you can name the output file.",
             font=("Arial", 11),
             foreground="black",
-            wraplength=350,  # makes it wrap nicely if long
-            justify="left"   # aligns text to the left
+            wraplength=350,
+            justify="left"
         )
-        self.note.grid(row=2, columnspan=2, pady=(5, 15), sticky="w")
+        self.note.grid(row=3, columnspan=2, pady=(10, 15), sticky="w")
 
         # Separator
-        ttk.Separator(main_frame, orient="horizontal").grid(row=3, columnspan=2, sticky="ew", pady=15)
+        ttk.Separator(main_frame, orient="horizontal").grid(
+            row=4, columnspan=2, sticky="ew", pady=15
+        )
 
         # Progress bar
-        self.progress = ttk.Progressbar(main_frame, mode="indeterminate", length=300)
-        self.progress.grid(row=4, columnspan=2, pady=5)
+        self.progress = ttk.Progressbar(
+            main_frame,
+            mode="indeterminate",
+            length=300
+        )
+        self.progress.grid(row=5, columnspan=2, pady=5)
 
         # Run button
-        ttk.Button(main_frame, text="Run", style="Run.TButton", command=self.run_conversion).grid(row=5, columnspan=2, pady=10)
+        ttk.Button(
+            main_frame,
+            text="Run",
+            style="Run.TButton",
+            command=self.run_conversion
+        ).grid(row=6, columnspan=2, pady=10)
 
         # Status bar
         self.status_var = StringVar(value="Ready")
-        self.status_label = Label(root, textvariable=self.status_var, font=("Arial", 9), bg="#eee", anchor="w", relief="sunken")
+        self.status_label = Label(
+            root, 
+            textvariable=self.status_var, 
+            font=("Arial", 9), 
+            bg="#eee", 
+            anchor="w", 
+            relief="sunken"
+        )
         self.status_label.pack(side="bottom", fill="x")
 
     def select_input_file(self):
@@ -118,11 +167,20 @@ class OCLCApp:
         if not self.output_dir:
             messagebox.showerror("Error", "Please select an output directory.")
             return
+        if not self.option_var.get():
+            messagebox.showerror("Error", "Please select an option.")
+            return
+
+        selected_filetype = self.option_var.get()
 
         # Run processing in a separate thread so GUI doesn't freeze
-        Thread(target=self._do_conversion, daemon=True).start()
+        Thread(
+            target=self._do_conversion, 
+            args=(selected_filetype,), 
+            daemon=True
+        ).start()
 
-    def _do_conversion(self):
+    def _do_conversion(self, selected_filetype):
         """
         Run the application.
         """
@@ -131,7 +189,7 @@ class OCLCApp:
             self.status_label.config(bg="#ffeaa7")
             self.progress.start(10)
 
-            output_path = build_sheet(self.input_file)
+            output_path = build_sheet(self.input_file, selected_filetype)
 
             self.status_var.set("Done!")
             self.status_label.config(bg="#72d572")  # light green for success
