@@ -4,7 +4,7 @@
 1. In advance, obtain the following keys: WorldCat API Key, API secret, API scopes, and Alma BibKey
 2. Click the down arrow for the [<> Code] button
 3. Select the "Download ZIP" option
-4. Extract the zip contents to your preferred directory under C:/Users/userName/
+4. Extract the zip contents to any preferred directory under C:/Users/yourUsername/
 5. Locate the dist folder within the root (Legacy Collection Analysis) folder
 6. Click the "app" entry to run the app.exe file
 7. Follow the prompts to enter the previously obtained keys
@@ -19,11 +19,12 @@
 7. Use the drop-down for the **Select File Type** to indicate which type of control number is in the source text file
 8. Click Run
 9. After the program is complete, specify a file name in the pop-up window prompt
+10. Inspect the output Excel file for the desired information. If there were any API errors, a {filename}_processing_errors.txt file will also appear in the same directory to view.
 
 ## Adding a Home Screen Shortcut
 
 1. Return to the program folder in the installed directory
 2. Locate the dist folder and open it
-3. Right-click the .exe file.
+3. Right-click the app.exe file.
   + Note: If you are on Windows 11, click Show more options first.
 4. Hover over **Send to** and select **Desktop (create shortcut)**.
