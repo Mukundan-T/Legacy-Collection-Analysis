@@ -7,13 +7,13 @@ file of information.
 
 from bookops_worldcat.authorize import WorldcatAccessToken
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from openpyxl import Workbook
 
 from worldcat_holdings import *
 from alma_holdings import *
 from process_values import *
 from worksheet import *
+from config import load_config
 
 def get_row(
     token: WorldcatAccessToken, 
@@ -64,7 +64,7 @@ def build_sheet(input_file: str, file_type: str) -> str:
     :param file_type: a string specifying which type of IDs file has
     :return: a string containing the path to the new Excel spreadsheet
     """
-    credential_file = Path(__file__).resolve().parent.parent / ".env"
+    credential_file = load_config()
     token, bib_key = verify_token(credential_file)
 
     work_book = Workbook()
@@ -80,8 +80,14 @@ def build_sheet(input_file: str, file_type: str) -> str:
             for identifier in ids
         ]
         for future in futures:
-            result = future.result()
-            work_sheet.append(result)
+            if not future:
+                print("NULL")
+                continue
+            try:
+                result = future.result() 
+                work_sheet.append(result)
+            except Exception as e:
+                print(f"Error processing identifier: {e}")
     
     set_column_widths(work_sheet)
     save_path = select_result_location()

@@ -4,12 +4,9 @@ Setup the environment variables for API requests.
 :author: Mukundan Thanigaivelan
 """
 
-import sys
-from pathlib import Path
 from dotenv import load_dotenv
+from config import ENV_FILE
 from tkinter import Tk, simpledialog, messagebox
-
-ENV_FILE = Path(sys.executable).parent / ".env"
 
 def ask(prompt: str, root: Tk) -> None:
     """

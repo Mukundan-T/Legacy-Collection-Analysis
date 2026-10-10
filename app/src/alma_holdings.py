@@ -6,10 +6,8 @@ IDs, and OCLC numbers, given input identifiers.
 """
 
 from xml.etree.cElementTree import fromstring
-from dotenv import load_dotenv
 from os import getenv
 from requests import get
-from pathlib import Path
 
 BASE_URL = "https://api-na.hosted.exlibrisgroup.com/almaws/v1"
 OCLC_URL = f"{BASE_URL}/items"
@@ -29,8 +27,6 @@ def get_mms_id(
     :param oclc: a given OCLC # or None
     :return: a string with MMS ID
     """
-    env_file = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_file)
     api_key = getenv("BIB_KEY")
 
     headers = {
@@ -78,8 +74,6 @@ def get_oclc(mms_id: str):
     :param mms_id: The MMS ID of the holding as a string
     :return: OCLC number as a string
     """
-    env_file = Path(__file__).resolve().parent.parent / ".env"
-    load_dotenv(env_file)
     api_key = getenv("BIB_KEY")
 
     response = get(
