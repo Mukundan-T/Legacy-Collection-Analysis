@@ -77,7 +77,7 @@ class OCLCApp:
         # Option selection
         ttk.Label(
             main_frame,
-            text="Select File Type"
+            text="Select Identifier Type"
         ).grid(row=2, column=0, sticky="w", pady=5, padx=10)
 
         self.option_var = StringVar()
