@@ -27,6 +27,36 @@ def process_date(year: int) -> tuple:
         if year < threshold:
             return range, score
 
+def process_uncertain_date(year: str) -> tuple:
+    """
+    Process a WorldCat date that may contain unknown digits,
+    such as '187u', '18uu', or 'uuuu'.
+
+    Returns a date range and a score. If the date spans
+    multiple scoring categories, returns 'Uncertain' and None.
+
+    :param year: the value of the year
+    :return: a date range and score as a tuple, or None
+    """
+    year = str(year).strip().lower()
+
+    if not year or not year.isdigit() and "u" not in year:
+        return "Unknown", None
+
+    # Convert unknown digits into a range of possible years
+    earliest = int(year.replace("u", "0"))
+    latest = int(year.replace("u", "9"))
+
+    # Use the existing scoring rules if every possible year
+    # falls within the same scoring category
+    earliest_result = process_date(earliest)
+    latest_result = process_date(latest)
+
+    if earliest_result == latest_result:
+        return earliest_result
+
+    return f"{earliest}-{latest}", None
+
 def process_holdings(holdings: int) -> tuple:
     """
     Given the number of holdings for a book, return the holdings range 

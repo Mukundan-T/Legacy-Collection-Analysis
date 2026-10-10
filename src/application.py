@@ -8,6 +8,7 @@ file of information.
 from bookops_worldcat.authorize import WorldcatAccessToken
 from concurrent.futures import ThreadPoolExecutor
 from openpyxl import Workbook
+from pathlib import Path
 
 from worldcat_holdings import *
 from alma_holdings import *
@@ -73,22 +74,39 @@ def build_sheet(input_file: str, file_type: str) -> str:
     with open(input_file, 'r', encoding='utf-8') as file:
         ids = [line.rstrip('\n') for line in file]
 
-    rate_limit = 10
-    with ThreadPoolExecutor(max_workers = rate_limit) as executor:
-        futures = [
-            executor.submit(get_row, token, bib_key, identifier, file_type) 
+    errors = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {
+            executor.submit(get_row, token, bib_key, identifier, file_type): identifier
             for identifier in ids
-        ]
-        for future in futures:
-            if not future:
-                print("NULL")
-                continue
+        }
+
+        for future, identifier in futures.items():
             try:
-                result = future.result() 
+                result = future.result()
+
+                if result is None or result == "":
+                    errors.append(
+                        f"{identifier}: Empty result returned"
+                    )
+                    continue
+
                 work_sheet.append(result)
+
             except Exception as e:
-                print(f"Error processing identifier: {e}")
+                errors.append(f"{identifier}: {e}")
+                print(f"Error processing {identifier}: {e}")
     
     set_column_widths(work_sheet)
     save_path = select_result_location()
+
+    if errors:
+        prefix = save_path.split('/')[-1].removesuffix('.xlsx')
+        error_path = Path(save_path).with_name(f"{prefix}_processing_errors.txt")
+
+        error_path.write_text(
+            "\n".join(errors),
+            encoding="utf-8"
+        )
+
     return save_new_sheet(save_path, work_book)

@@ -63,9 +63,25 @@ def get_mms_id(
     item = response.json()
 
     if oclc:
-        return item["bib"][0]["mms_id"]
+        bibs = item.get("bib")
+        if not bibs or not isinstance(bibs, list):
+            raise ValueError(f"No bibliographic record found for OCLC {oclc}")
 
-    return item["bib_data"]["mms_id"]
+        mms_id = bibs[0].get("mms_id")
+    else:
+        bib_data = item.get("bib_data")
+        if not isinstance(bib_data, dict):
+            raise ValueError("Response does not contain bib_data")
+
+        mms_id = bib_data.get("mms_id")
+
+    if mms_id is None or not str(mms_id).strip():
+        identifier = barcode or pid or oclc
+        raise ValueError(
+            f"No MMS ID returned for identifier {identifier}"
+        )
+
+    return str(mms_id)
 
 def get_oclc(mms_id: str):
     """
@@ -87,16 +103,30 @@ def get_oclc(mms_id: str):
     response.raise_for_status()
     bib = response.json()
 
-    if not bib["network_number"]:
-        return ""
-    
-    return next(
-        (number.removeprefix("(OCoLC)") 
-            for number in bib["network_number"] 
-            if number.startswith("(OCoLC)")
+    network_numbers = bib.get("network_number")
+
+    if not network_numbers:
+        raise ValueError(
+            f"No network numbers found for MMS ID {mms_id}"
+        )
+
+    oclc = next(
+        (
+            number.removeprefix("(OCoLC)")
+            for number in network_numbers
+            if isinstance(number, str)
+            and number.startswith("(OCoLC)")
+            and number.removeprefix("(OCoLC)").strip()
         ),
         None
     )
+
+    if oclc is None:
+        raise ValueError(
+            f"No OCLC number found for MMS ID {mms_id}"
+        )
+
+    return oclc
 
 def get_info_from_mms_id(mms_id: str, params: dict) -> str:
     """

@@ -8,35 +8,49 @@ information, and arrange them properly.
 from analytics import *
 
 def get_ranges_and_scores(worldcat_values: list, alma_values: list) -> tuple:
-    """
-    Using the given Worldcat and Alma information, obtain the ranges
-    and scores for the correct fields and return them in 2 lists.
+    date1 = str(worldcat_values[3]).strip()
 
-    :param worldcat_values: a list of Worldcat information
-    :param alma_values: a list of Alma information
-    :return: a tuple of 2 lists
-    """
-    date1 = int(worldcat_values[3])
-    holdings = int(worldcat_values[5])
-    shared_print = int(worldcat_values[6])
+    try:
+        holdings = int(worldcat_values[5])
+    except (ValueError, TypeError):
+        holdings = None
+
+    try:
+        shared_print = int(worldcat_values[6])
+    except (ValueError, TypeError):
+        shared_print = None
+
     online_vers = worldcat_values[7]
     internal_note2 = alma_values[7]
 
-    date1_range, date1_score = process_date(date1)
-    holdings_range, holdings_score = process_holdings(holdings)
-    shared_print_range, shared_print_score = process_shared_print(shared_print)
+    date1_range, date1_score = process_uncertain_date(date1)
+
+    if holdings is None:
+        holdings_range, holdings_score = "Unknown", None
+    else:
+        holdings_range, holdings_score = process_holdings(holdings)
+
+    if shared_print is None:
+        shared_print_range, shared_print_score = "Unknown", None
+    else:
+        shared_print_range, shared_print_score = process_shared_print(shared_print)
+
     online_vers_range, online_vers_score = process_online_vers(online_vers)
     internal_note2_east_range, internal_note2_east_score = process_alma_internal_note_east(internal_note2)
     internal_note2_loc_range, internal_note2_loc_score = process_alma_internal_note_loc(internal_note2)
 
-    ranges = [date1_range, holdings_range, shared_print_range, 
-              online_vers_range, internal_note2_east_range, 
-              internal_note2_loc_range]
-    
-    scores = [date1_score, holdings_score, shared_print_score, 
-              online_vers_score, internal_note2_east_score, 
-              internal_note2_loc_score]
-    
+    ranges = [
+        date1_range, holdings_range, shared_print_range,
+        online_vers_range, internal_note2_east_range,
+        internal_note2_loc_range
+    ]
+
+    scores = [
+        date1_score, holdings_score, shared_print_score,
+        online_vers_score, internal_note2_east_score,
+        internal_note2_loc_score
+    ]
+
     return ranges, scores
 
 def arrange_info(worldcat_info: list, alma_info: list, ranges: list, scores: list) -> list:
@@ -70,7 +84,7 @@ def arrange_info(worldcat_info: list, alma_info: list, ranges: list, scores: lis
      online_vers_score, internal_note2_east_score, 
      internal_note2_loc_score] = scores
 
-    sum_of_scores = sum(scores)
+    sum_of_scores = sum([score or 0 for score in scores])
 
     return [perm_call_num, item_element_desc, title_details, title, edition_details, 
             publisher_details, publisher, date_one_details, date_two_details, 
